@@ -1,0 +1,130 @@
+:root {
+  color-scheme: light dark;
+  --border: #d8d8dc;
+  --bg-soft: #f6f6f8;
+  --accent: #3b5bdb;
+  --error: #c0392b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  color: #1c1c1e;
+  background: #fff;
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 16px;
+  background: var(--bg-soft);
+}
+
+.sidebar h1 { font-size: 18px; margin: 0 0 8px; }
+.sidebar .hint { font-size: 12px; color: #666; }
+
+.trajectory-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.trajectory-list li {
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  word-break: break-all;
+}
+.trajectory-list li:hover { background: #e9e9f2; }
+.trajectory-list li.active { background: var(--accent); color: #fff; }
+
+.content { flex: 1; padding: 24px; max-width: 960px; }
+
+.empty-state { color: #888; padding-top: 60px; text-align: center; }
+
+.meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.meta-bar label { display: flex; flex-direction: column; font-size: 12px; gap: 4px; }
+.meta-bar input, .meta-bar select { padding: 6px 8px; font-size: 13px; }
+.meta-file { font-size: 12px; color: #666; }
+.meta-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.save-status { font-size: 12px; color: #2e7d32; }
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover { background: #f0f0f5; }
+
+.parse-warnings {
+  background: #fff4e5;
+  border: 1px solid #ffcf87;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.record-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.record-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.record-index { font-weight: 600; }
+.record-timestamp { font-size: 12px; color: #888; flex: 1; }
+
+.block { display: block; font-size: 12px; margin: 10px 0; }
+.block textarea, .block input { width: 100%; font-family: inherit; font-size: 13px; padding: 6px; margin-top: 4px; }
+
+.events-details { margin: 10px 0; }
+.events-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.events-list li {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.events-list li:last-child { border-bottom: none; }
+.events-list .event-kind { font-weight: 600; margin-right: 6px; }
+.events-list .kind-tool_use { background: #eef2ff; }
+.events-list .kind-tool_result { background: #f5f5f5; }
+.events-list .kind-tool_result.is-error { background: #fdecea; color: var(--error); }
+.events-list .kind-assistant_text { background: #f0fbf4; }
+.events-list .kind-user_input { background: #fff9e6; }
+
+.issues-block { margin-top: 12px; }
+.issues-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; }
+.issue-row {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+}
+.issue-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.issue-row textarea { width: 100%; font-family: inherit; font-size: 12px; padding: 6px; margin-top: 4px; }
+.issue-types { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; margin-bottom: 6px; }
+.issue-types label { display: flex; align-items: center; gap: 3px; background: var(--bg-soft); padding: 2px 6px; border-radius: 4px; }

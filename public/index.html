@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>轨迹标注工具</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>轨迹标注工具</h1>
+      <p class="hint">把 <code>.jsonl</code> 会话文件放入 <code>data/trajectories/</code> 后刷新此列表。</p>
+      <button id="refresh-btn" type="button">刷新列表</button>
+      <ul id="trajectory-list" class="trajectory-list"></ul>
+    </aside>
+
+    <main class="content">
+      <div id="empty-state" class="empty-state">
+        <p>从左侧选择一个会话文件开始标注。</p>
+      </div>
+
+      <div id="workspace" class="workspace" hidden>
+        <section class="meta-bar">
+          <label>作答人 <input id="meta-answerer" type="text" /></label>
+          <label>使用工具
+            <select id="meta-tool"></select>
+          </label>
+          <label>模型配置 <input id="meta-model" type="text" placeholder="实际模型名称与接入方式" /></label>
+          <label>最终代码链接 <input id="meta-repo-link" type="text" placeholder="commit 页面链接" /></label>
+          <span class="meta-file">原始会话：<code id="meta-filename"></code></span>
+          <div class="meta-actions">
+            <span id="save-status" class="save-status"></span>
+            <button id="save-btn" type="button">保存标注</button>
+            <button id="export-btn" type="button">导出 CSV</button>
+          </div>
+        </section>
+
+        <section id="parse-warnings" class="parse-warnings" hidden></section>
+
+        <section id="record-list" class="record-list"></section>
+      </div>
+    </main>
+  </div>
+
+  <template id="record-template">
+    <article class="record-card" data-role="record-card">
+      <header class="record-header">
+        <span class="record-index"></span>
+        <span class="record-timestamp"></span>
+        <label>阶段
+          <select data-field="阶段"></select>
+        </label>
+      </header>
+
+      <label class="block">本次输入
+        <textarea data-field="本次输入" rows="3"></textarea>
+      </label>
+
+      <details class="events-details">
+        <summary>会话事件（<span data-role="event-count">0</span>）</summary>
+        <ol class="events-list" data-role="events-list"></ol>
+      </details>
+
+      <label class="block">核查结论
+        <select data-field="核查结论">
+          <option value=""></option>
+        </select>
+      </label>
+
+      <div class="issues-block">
+        <div class="issues-header">
+          <span>问题标注</span>
+          <button type="button" data-role="add-issue">+ 添加问题点</button>
+        </div>
+        <div class="issues-list" data-role="issues-list"></div>
+      </div>
+
+      <label class="block">异常与疑点
+        <textarea data-field="异常与疑点" rows="2" placeholder="ENV / USER / 待核实的问题及原因"></textarea>
+      </label>
+    </article>
+  </template>
+
+  <template id="issue-template">
+    <div class="issue-row" data-role="issue-row">
+      <div class="issue-row-header">
+        <span class="issue-seq" data-role="issue-seq"></span>
+        <button type="button" data-role="remove-issue">删除</button>
+      </div>
+      <div class="issue-types" data-role="issue-types"></div>
+      <textarea data-field="问题现象" placeholder="问题现象：Agent 做错、遗漏或多做了什么"></textarea>
+      <textarea data-field="判断理由" placeholder="判断理由：为什么属于该类错误"></textarea>
+      <textarea data-field="影响与恢复" placeholder="影响与恢复：造成什么影响，是否已纠正"></textarea>
+      <textarea data-field="改进建议" placeholder="改进建议：本应如何处理"></textarea>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
