@@ -1,7 +1,10 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { parseJsonlTrajectory } = require('../lib/jsonlParser');
 const schema = require('../lib/annotationSchema');
 const store = require('../storage/fileStore');
+const roster = require('../lib/roster');
+const { requireAuth, setCandidateCookie, clearCandidateCookie } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -15,6 +18,33 @@ function asyncRoute(handler) {
   };
 }
 
+// The access code is the only credential in this system, so login attempts
+// are capped per IP to slow down brute-forcing a candidate's code.
+const loginLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '尝试次数过多，请 10 分钟后再试' },
+});
+
+router.post('/login', loginLimiter, express.json(), asyncRoute((req, res) => {
+  const code = typeof req.body?.code === 'string' ? req.body.code.trim() : '';
+  const candidate = roster.lookupCandidate(code);
+  if (!candidate) return res.status(401).json({ error: '代码无效，请核实后重试' });
+  setCandidateCookie(req, res, code);
+  res.json({ name: candidate.name });
+}));
+
+router.post('/logout', (req, res) => {
+  clearCandidateCookie(res);
+  res.json({ ok: true });
+});
+
+router.get('/me', requireAuth, (req, res) => {
+  res.json({ name: req.candidate.name });
+});
+
 router.get('/schema', (req, res) => {
   res.json({
     stages: schema.STAGES,
@@ -24,18 +54,37 @@ router.get('/schema', (req, res) => {
   });
 });
 
+// Everything below reads/writes one candidate's own files; requireAuth
+// resolves that candidate from the signed cookie and nothing else.
+router.use(['/trajectories', '/annotations'], requireAuth);
+
 router.get('/trajectories', asyncRoute((req, res) => {
-  res.json(store.listTrajectories());
+  res.json(store.listTrajectories(req.candidate.code));
+}));
+
+router.post('/trajectories', express.json({ limit: '20mb' }), asyncRoute((req, res) => {
+  const { group, filename, content } = req.body || {};
+  const id = store.importTrajectory(req.candidate.code, { group, filename, content });
+  res.status(201).json({ id });
 }));
 
 router.get('/trajectories/:id', asyncRoute((req, res) => {
-  const raw = store.readTrajectoryRaw(req.params.id);
+  const raw = store.readTrajectoryRaw(req.candidate.code, req.params.id);
   const parsed = parseJsonlTrajectory(raw);
   res.json(parsed);
 }));
 
+router.patch('/trajectories/:id', express.json(), asyncRoute((req, res) => {
+  const { newFilename } = req.body || {};
+  if (typeof newFilename !== 'string' || newFilename.trim().length === 0) {
+    return res.status(400).json({ error: '缺少 newFilename' });
+  }
+  const id = store.renameTrajectory(req.candidate.code, req.params.id, newFilename.trim());
+  res.json({ id });
+}));
+
 router.get('/annotations/:id', asyncRoute((req, res) => {
-  const doc = store.readAnnotation(req.params.id) || schema.emptyDocument(req.params.id);
+  const doc = store.readAnnotation(req.candidate.code, req.params.id) || schema.emptyDocument(req.params.id);
   res.json(doc);
 }));
 
@@ -58,7 +107,7 @@ router.put('/annotations/:id', express.json({ limit: '10mb' }), asyncRoute((req,
   const error = validateDocument(req.body);
   if (error) return res.status(400).json({ error });
   const doc = { ...req.body, trajectoryId: req.params.id };
-  store.writeAnnotation(req.params.id, doc);
+  store.writeAnnotation(req.candidate.code, req.params.id, doc);
   res.json({ ok: true });
 }));
 
@@ -79,7 +128,7 @@ function formatIssues(issues) {
 }
 
 router.get('/annotations/:id/export', asyncRoute((req, res) => {
-  const doc = store.readAnnotation(req.params.id);
+  const doc = store.readAnnotation(req.candidate.code, req.params.id);
   if (!doc) return res.status(404).json({ error: '尚无标注数据' });
 
   const columns = [
@@ -107,8 +156,9 @@ router.get('/annotations/:id/export', asyncRoute((req, res) => {
     });
 
   const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\r\n');
+  const safeFilename = req.params.id.replace(/\//g, '__');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${req.params.id}.annotations.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.annotations.csv"`);
   res.send('﻿' + csv); // BOM so Excel/飞书导入 renders Chinese correctly
 }));
 

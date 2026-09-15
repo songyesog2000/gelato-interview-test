@@ -45,22 +45,138 @@
     const list = await api('/trajectories');
     trajectoryListEl.innerHTML = '';
     if (list.length === 0) {
-      trajectoryListEl.innerHTML = '<li style="cursor:default;color:#999;">data/trajectories/ 下暂无 .jsonl 文件</li>';
+      trajectoryListEl.innerHTML = '<p class="empty-hint">data/trajectories/ 和 samples/ 下暂无 .jsonl 文件</p>';
       return;
     }
+
+    const groups = new Map();
     for (const traj of list) {
-      const li = document.createElement('li');
-      li.textContent = traj.id;
-      li.dataset.id = traj.id;
-      if (traj.id === state.currentId) li.classList.add('active');
-      li.addEventListener('click', () => selectTrajectory(traj.id));
-      trajectoryListEl.appendChild(li);
+      if (!groups.has(traj.group)) groups.set(traj.group, []);
+      groups.get(traj.group).push(traj);
     }
+
+    for (const [group, trajs] of groups) {
+      const label = document.createElement('div');
+      label.className = 'trajectory-group-label';
+      label.textContent = group;
+      trajectoryListEl.appendChild(label);
+
+      for (const traj of trajs) {
+        trajectoryListEl.appendChild(renderTrajectoryItem(traj));
+      }
+    }
+  }
+
+  function renderTrajectoryItem(traj) {
+    const row = document.createElement('div');
+    row.className = 'trajectory-item';
+    row.dataset.id = traj.id;
+    if (traj.id === state.currentId) row.classList.add('active');
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'item-name';
+    nameSpan.textContent = traj.filename;
+    nameSpan.title = traj.id;
+    row.appendChild(nameSpan);
+    row.addEventListener('click', () => selectTrajectory(traj.id));
+
+    if (traj.writable) {
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'rename-btn';
+      renameBtn.textContent = '✎';
+      renameBtn.title = '重命名';
+      renameBtn.addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        startRename(row, nameSpan, traj);
+      });
+      row.appendChild(renameBtn);
+    }
+
+    return row;
+  }
+
+  function startRename(row, nameSpan, traj) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rename-input';
+    input.value = traj.filename;
+    row.replaceChild(input, nameSpan);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = async (commit) => {
+      if (done) return;
+      done = true;
+      const newFilename = input.value.trim();
+      if (commit && newFilename && newFilename !== traj.filename) {
+        try {
+          const result = await api(`/trajectories/${encodeURIComponent(traj.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ newFilename }),
+          });
+          if (state.currentId === traj.id) state.currentId = result.id;
+        } catch (err) {
+          alert(`重命名失败：${err.message}`);
+        }
+      }
+      loadTrajectoryList();
+    };
+
+    input.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Enter') finish(true);
+      if (evt.key === 'Escape') finish(false);
+    });
+    input.addEventListener('blur', () => finish(true));
+  }
+
+  function setupImportForm() {
+    const form = el('import-form');
+    const fileInput = el('import-file');
+    const groupInput = el('import-group');
+    const errorEl = el('import-error');
+
+    el('import-btn').addEventListener('click', () => {
+      form.hidden = !form.hidden;
+      errorEl.hidden = true;
+    });
+    el('import-cancel-btn').addEventListener('click', () => {
+      form.hidden = true;
+      fileInput.value = '';
+      groupInput.value = '';
+    });
+    el('import-confirm-btn').addEventListener('click', async () => {
+      errorEl.hidden = true;
+      const file = fileInput.files[0];
+      if (!file) {
+        errorEl.textContent = '请先选择一个 .jsonl 文件';
+        errorEl.hidden = false;
+        return;
+      }
+      try {
+        const content = await file.text();
+        const { id } = await api('/trajectories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ group: groupInput.value.trim(), filename: file.name, content }),
+        });
+        form.hidden = true;
+        fileInput.value = '';
+        groupInput.value = '';
+        await loadTrajectoryList();
+        selectTrajectory(id);
+      } catch (err) {
+        errorEl.textContent = `导入失败：${err.message}`;
+        errorEl.hidden = false;
+      }
+    });
   }
 
   async function selectTrajectory(id) {
     state.currentId = id;
-    [...trajectoryListEl.children].forEach((li) => li.classList.toggle('active', li.dataset.id === id));
+    [...trajectoryListEl.querySelectorAll('.trajectory-item')].forEach((row) => row.classList.toggle('active', row.dataset.id === id));
 
     const [parsed, doc] = await Promise.all([
       api(`/trajectories/${encodeURIComponent(id)}`),
@@ -255,8 +371,76 @@
     }
   }
 
-  function exportCsv() {
-    window.location.href = `/api/annotations/${encodeURIComponent(state.currentId)}/export`;
+  async function exportCsv() {
+    try {
+      const res = await fetch(`/api/annotations/${encodeURIComponent(state.currentId)}/export`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `导出失败: ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${state.currentId.replace(/\//g, '__')}.annotations.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`导出失败：${err.message}`);
+    }
+  }
+
+  // ---------- auth ----------
+
+  async function tryResumeSession() {
+    try {
+      const me = await api('/me');
+      el('candidate-name').textContent = me.name;
+      el('login-screen').hidden = true;
+      el('app-shell').hidden = false;
+      return true;
+    } catch (err) {
+      el('login-screen').hidden = false;
+      el('app-shell').hidden = true;
+      return false;
+    }
+  }
+
+  async function doLogin(evt) {
+    evt.preventDefault();
+    const codeInput = el('login-code');
+    const errorEl = el('login-error');
+    errorEl.hidden = true;
+    const code = codeInput.value.trim();
+    if (!code) return;
+    try {
+      await api('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      codeInput.value = '';
+      const ok = await tryResumeSession();
+      if (ok) {
+        await loadTrajectoryList();
+      }
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.hidden = false;
+    }
+  }
+
+  async function doLogout() {
+    await api('/logout', { method: 'POST' }).catch(() => {});
+    state.currentId = null;
+    state.parsed = null;
+    state.doc = null;
+    el('empty-state').hidden = false;
+    el('workspace').hidden = true;
+    el('login-screen').hidden = false;
+    el('app-shell').hidden = true;
   }
 
   // ---------- init ----------
@@ -264,9 +448,13 @@
   el('refresh-btn').addEventListener('click', loadTrajectoryList);
   el('save-btn').addEventListener('click', saveAnnotations);
   el('export-btn').addEventListener('click', exportCsv);
+  el('login-form').addEventListener('submit', doLogin);
+  el('logout-btn').addEventListener('click', doLogout);
+  setupImportForm();
 
   (async function init() {
     await loadSchema();
-    await loadTrajectoryList();
+    const authed = await tryResumeSession();
+    if (authed) await loadTrajectoryList();
   })();
 })();

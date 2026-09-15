@@ -1,13 +1,15 @@
 docs/
 *.jsonl
+!samples/*.jsonl
 node_modules/
 .DS_Store
 
-# runtime data: the interviewee's own trajectory files and working
-# annotations should not be committed to the shared repo. Keep the
-# directories themselves (via .gitkeep) so the app has somewhere to read
-# from and write to right after a fresh clone.
-data/trajectories/*
-!data/trajectories/.gitkeep
-data/annotations/*
-!data/annotations/.gitkeep
+# per-candidate runtime data (their own trajectory files + annotation work)
+# lives entirely under data/candidates/<code>/ once the server assigns it;
+# none of it should be committed to the shared repo. Keep the directory
+# itself (via .gitkeep) so the app has somewhere to write on a fresh clone.
+data/candidates/*
+!data/candidates/.gitkeep
+
+# real candidate code -> name roster; only the example template is tracked
+server/config/candidates.json
